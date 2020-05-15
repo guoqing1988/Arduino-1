@@ -181,8 +181,30 @@ void update_dnd_logic() {
 	}
 }
 
+// attempt to update the animation states
+void update_animation_state() {
+	if (time < millis()) {
+		time += STATES[current_state][2];
 
-/* MAIN CODE */
+		if (being_generated) {
+			// TODO refactor
+			display_state[STATES[current_state][0]] = ascii_to_bytes[' '];
+			display_state[3 - STATES[current_state][0]] = ascii_to_bytes[' '];
+			current_state = (current_state + 1) % STATE_COUNT;
+			display_state[STATES[current_state][0]] = STATES[current_state][1];
+			display_state[3 - STATES[current_state][0]] = mirror_state(STATES[current_state][1]);
+		}
+	}
+}
+
+// set the prev_button_state array to what the buttons are currently reading
+void set_previous_button_states() {
+	for (int i = 0; i < BUTTONS; i++)
+		prev_button_state[i] = is_pressed(i);
+}
+
+
+
 void setup() {
 	// initialize all buttons to output
 	for (int i = 0; i < BUTTONS; i++)
@@ -207,19 +229,7 @@ void setup() {
 }
 
 void loop() {
-	// move toggle between animation states
-	if (time < millis()) {
-		time += STATES[current_state][2];
-
-		if (being_generated) {
-			// TODO refactor
-			display_state[STATES[current_state][0]] = ascii_to_bytes[' '];
-			display_state[3 - STATES[current_state][0]] = ascii_to_bytes[' '];
-			current_state = (current_state + 1) % STATE_COUNT;
-			display_state[STATES[current_state][0]] = STATES[current_state][1];
-			display_state[3 - STATES[current_state][0]] = mirror_state(STATES[current_state][1]);
-		}
-	}
+	update_animation_state();
 
 	update_button_buffer_state();
 
@@ -229,7 +239,5 @@ void loop() {
 
 	update_dnd_logic();
 
-	// remember previous button states
-	for (int i = 0; i < BUTTONS; i++)
-		prev_button_state[i] = is_pressed(i);
+	set_previous_button_states();
 }
