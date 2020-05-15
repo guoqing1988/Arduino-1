@@ -206,12 +206,12 @@ void loop() {
 	else if (was_released(0)) {
 		long sum = 0;
 
+		// generate the random number by repeatedly throwing the dice
 		for (int i = 0; i < throws + 1; i++)
-			sum += random_number(current_time() - generation_start_time, dice_sides[dice]);
+			sum += random_number(current_time() - generation_start_time, dice_sides[dice]) + 1;
 
-		for (int i = 0; i < 4; i++)
-			display_state[i] = ascii_to_display_bytes[' '];
-
+		// display the random number on the screen
+		reset_display();
 		int i = 3;
 		while (sum > 0) {
 			display_state[i--] = ascii_to_display_bytes[sum % 10 + 48];
