@@ -15,7 +15,7 @@ constexpr byte DISPLAY_COUNT = 4;
 byte display = 0;  // which display to update on a given iteration
 byte display_state[DISPLAY_COUNT];  // states of each of the display digits
 
-byte ascii_to_display_bytes[128];  // character to display encoding
+byte ascii_to_bytes[128];  // character to display encoding
 
 
 // # DND
@@ -58,7 +58,7 @@ long time = 0;
 
 
 // check a button status, returning true if it's on, else false
-bool is_button_on(int button) {
+bool is_pressed(int button) {
 	int average = 0;
 
 	for (int i = 0; i < BUFFER_SIZE; i++)
@@ -68,8 +68,8 @@ bool is_button_on(int button) {
 }
 
 // return true if the button was just pressed/released
-bool was_pressed(int button) { return !prev_button_state[button] && is_button_on(button); }
-bool was_released(int button) { return prev_button_state[button] && !is_button_on(button); }
+bool was_pressed(int button) { return !prev_button_state[button] && is_pressed(button); }
+bool was_released(int button) { return prev_button_state[button] && !is_pressed(button); }
 
 
 // update the state of the given display to the given value
@@ -92,10 +92,10 @@ void set_display(byte state, byte display) {
 
 // set the display status to show the current throw and dice configuration
 void set_display_to_config() {
-	display_state[0] = ascii_to_display_bytes[(throws + 1) + 48];
-	display_state[1] = ascii_to_display_bytes['d'];
-	display_state[2] = ascii_to_display_bytes[(dice_sides[dice] % 100) / 10 + 48];
-	display_state[3] = ascii_to_display_bytes[dice_sides[dice] % 10 + 48];
+	display_state[0] = ascii_to_bytes[(throws + 1) + '0'];
+	display_state[1] = ascii_to_bytes['d'];
+	display_state[2] = ascii_to_bytes[(dice_sides[dice] % 100) / 10 + '0'];
+	display_state[3] = ascii_to_bytes[dice_sides[dice] % 10 + '0'];
 }
 
 // return a random number, given a long (by multiplying and adding primes)
@@ -107,7 +107,7 @@ long current_time() {return micros() / 4;}
 // clear the display
 void reset_display() {
 	for (int i = 0; i < DISPLAY_COUNT; i++)
-		display_state[i] = ascii_to_display_bytes[' '];
+		display_state[i] = ascii_to_bytes[' '];
 }
 
 // start generating a random number
@@ -117,13 +117,11 @@ void start_generation() {
 	reset_display();
 }
 
-//  H
-// C G
-//  B      0bABCDEFGH
-// D F
-//  E  A
-
-// 0bABCDEFGH -> 0b0BFGHCDE
+//  H           E
+// C G         F D
+//  B     ->    B
+// D F         G C
+//  E  A        H A
 byte mirror_state(byte state) {
 	return (state & 0b11000000
 		| (state & 0b00100000) >> 3
@@ -135,69 +133,30 @@ byte mirror_state(byte state) {
 	);
 }
 
-
-/* MAIN CODE */
-void setup() {
-	// initialize all buttons to output
-	for (int i = 0; i < BUTTONS; i++)
-		pinMode(BUTTON_PINS[i], INPUT);
-	
-	// initialize display pins to output
-	pinMode(latch_pin, OUTPUT);
-	pinMode(data_pin, OUTPUT);
-	pinMode(clock_pin, OUTPUT);
-
-	// set to blank by default
-	for (int i = 0; i < 128; i++)
-		ascii_to_display_bytes[i] = 0b11111111;
-
-	// set digits from funshield header
-	for (int i = 0; i < 10; i++)
-		ascii_to_display_bytes[i  + 48] = digits[i];
-
-	ascii_to_display_bytes[100] = 0b10100001;  // d
-
-	reset_display();
-}
-
-void loop() {
-	// move toggle between animation states
-	if (time < millis()) {
-		time += STATES[current_state][2];
-
-		if (being_generated) {
-			display_state[STATES[current_state][0]] = ascii_to_display_bytes[' '];
-			display_state[3 - STATES[current_state][0]] = ascii_to_display_bytes[' '];
-			current_state = (current_state + 1) % STATE_COUNT;
-			display_state[STATES[current_state][0]] = STATES[current_state][1];
-			display_state[3 - STATES[current_state][0]] = mirror_state(STATES[current_state][1]);
-		}
-	}
-
-	// read the current buttons value to the buffer
+// write the current button state to the buffer
+void update_button_buffer_state() {
 	button_buffer_position = (button_buffer_position + 1) % BUFFER_SIZE;
+
 	for (int i = 0; i < BUTTONS; i++) {
 		bool current_state = !digitalRead(BUTTON_PINS[i]);
 		button_buffer[i][button_buffer_position] = current_state;
 	}
+}
 
-	// update the display
-	display = (display + 1) % 4;
-	set_display(display_state[display], display);
-
-	// change states, depending on buttons pressed
+// a function to update the current state of the app
+void update_dnd_logic() {
 	if (was_pressed(0)) {
 		if (mode != NORMAL) mode = NORMAL;
 
 		start_generation();
 	}
-	else if (was_pressed(1)) {
+	else if (was_pressed(1) && !being_generated) {
 		if (mode != CONFIGURATION) mode = CONFIGURATION;
 		else throws = (throws + 1) % MAX_THROWS;
 
 		set_display_to_config();
 	}
-	else if (was_pressed(2)) {
+	else if (was_pressed(2) && !being_generated) {
 		if (mode != CONFIGURATION) mode = CONFIGURATION;
 		else dice = (dice + 1) % DICE_COUNT;
 
@@ -214,14 +173,63 @@ void loop() {
 		reset_display();
 		int i = 3;
 		while (sum > 0) {
-			display_state[i--] = ascii_to_display_bytes[sum % 10 + 48];
+			display_state[i--] = ascii_to_bytes[sum % 10 + 48];
 			sum /= 10;
 		}
 
 		being_generated = false;
 	}
+}
+
+
+/* MAIN CODE */
+void setup() {
+	// initialize all buttons to output
+	for (int i = 0; i < BUTTONS; i++)
+		pinMode(BUTTON_PINS[i], INPUT);
+	
+	// initialize display pins to output
+	pinMode(latch_pin, OUTPUT);
+	pinMode(data_pin, OUTPUT);
+	pinMode(clock_pin, OUTPUT);
+
+	// set to blank by default
+	for (int i = 0; i < 128; i++)
+		ascii_to_bytes[i] = 0b11111111;
+
+	// set digits from funshield header
+	for (int i = 0; i < 10; i++)
+		ascii_to_bytes[i  + 48] = digits[i];
+
+	ascii_to_bytes[100] = 0b10100001;  // d
+
+	reset_display();
+}
+
+void loop() {
+	// move toggle between animation states
+	if (time < millis()) {
+		time += STATES[current_state][2];
+
+		if (being_generated) {
+			// TODO refactor
+			display_state[STATES[current_state][0]] = ascii_to_bytes[' '];
+			display_state[3 - STATES[current_state][0]] = ascii_to_bytes[' '];
+			current_state = (current_state + 1) % STATE_COUNT;
+			display_state[STATES[current_state][0]] = STATES[current_state][1];
+			display_state[3 - STATES[current_state][0]] = mirror_state(STATES[current_state][1]);
+		}
+	}
+
+	update_button_buffer_state();
+
+	// update the display
+	display = (display + 1) % 4;
+	set_display(display_state[display], display);
+
+	update_dnd_logic();
 
 	// remember previous button states
 	for (int i = 0; i < BUTTONS; i++)
-		prev_button_state[i] = is_button_on(i);
+		prev_button_state[i] = is_pressed(i);
 }
