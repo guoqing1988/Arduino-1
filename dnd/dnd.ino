@@ -81,13 +81,9 @@ bool was_released(int button) { return prev_button_state[button] && !is_pressed(
 //  E  A
 void set_display(byte state, byte display) {
 	digitalWrite(latch_pin, LOW);
-
-	// 0 3 2 1 -> 0 1 2 3, since the display order is wrong
-	int correct_display = (3 - ((3 - display + 1) % 4));
-
-	shiftOut(data_pin, clock_pin, MSBFIRST, 1 << correct_display);
-	digitalWrite(latch_pin, HIGH);
 	shiftOut(data_pin, clock_pin, MSBFIRST, state);
+	shiftOut(data_pin, clock_pin, MSBFIRST, 1 << display);
+	digitalWrite(latch_pin, HIGH);
 }
 
 // set the display status to show the current throw and dice configuration
