@@ -52,8 +52,8 @@ constexpr int STATES[STATE_COUNT][3] = {
 	{0, 0b11011111, 150},
 };
 
-int current_state = 0;
-long time = 0;
+int animation_state = 0;  // which state are we on
+long time = 0;  // for transition time counting
 
 
 
@@ -98,7 +98,7 @@ void set_display_to_config() {
 	display_state[3] = ascii_to_bytes[dice_sides[dice] % 10 + '0'];
 }
 
-// return a random number, given a long (by multiplying and adding primes)
+// return a random number, given a long (by multiplying and adding small primes)
 long random_number(long seed, long maximum) { return ((seed * 257) + 127) % maximum; }
 
 // return the current time (in an arbitrary unit)
@@ -184,21 +184,24 @@ void update_dnd_logic() {
 // attempt to update the animation states
 void update_animation_state() {
 	if (time < millis()) {
-		time += STATES[current_state][2];
+		time += STATES[animation_state][2];
 
 		if (being_generated) {
-			// TODO refactor
-			display_state[STATES[current_state][0]] = ascii_to_bytes[' '];
-			display_state[3 - STATES[current_state][0]] = ascii_to_bytes[' '];
-			current_state = (current_state + 1) % STATE_COUNT;
-			display_state[STATES[current_state][0]] = STATES[current_state][1];
-			display_state[3 - STATES[current_state][0]] = mirror_state(STATES[current_state][1]);
+			reset_display();
+
+			animation_state = (animation_state + 1) % STATE_COUNT;
+			byte current_display = STATES[animation_state][0];
+			byte current_state = STATES[animation_state][1];
+
+			// display the animation and its mirrored version
+			display_state[current_display] = current_state;
+			display_state[DISPLAY_COUNT - current_display - 1] = mirror_state(current_state);
 		}
 	}
 }
 
 // set the prev_button_state array to what the buttons are currently reading
-void set_previous_button_states() {
+void update_previous_button_states() {
 	for (int i = 0; i < BUTTONS; i++)
 		prev_button_state[i] = is_pressed(i);
 }
@@ -239,5 +242,5 @@ void loop() {
 
 	update_dnd_logic();
 
-	set_previous_button_states();
+	update_previous_button_states();
 }
